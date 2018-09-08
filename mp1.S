@@ -79,6 +79,8 @@ mp1_rtc_tasklet:
 
 		#Begin by going through the missile list and updating everything
 		MOVL mp1_missile_list, %EAX
+		CMPL $0, %EAX
+		JE list_loop_done
 list_loop:
 		PUSHL %EAX
 		PUSHL %ESI
@@ -90,9 +92,9 @@ list_loop:
 		POPL %ESI
 		POPL %EAX
 		MOVL NEXT(%EAX), %EAX
-		CMP $0, %EAX
+		CMPL $0, %EAX
 		JNE list_loop
-
+list_loop_done:
 		POPL %EDI
 		POPL %ESI
 		POPL %EBX
@@ -239,9 +241,20 @@ update_missiles:
 
 		MOVL 8(%EBP), %EAX
 		#Check if missile is exploding
-		MOVL EXPLODED(%EAX), %EBX
-		CMPL $0, %EBX
+		MOVW EXPLODED(%EAX), %BX
+		CMPW $0, %BX
 		JG update_explode_missile
+
+		#Move the missile
+		MOVL VX(%EAX), %ESI
+		MOVL X(%EAX), %EDI
+		ADDL %ESI, %EDI
+		MOVL %EDI, X(%EAX)
+
+		MOVL VY(%EAX), %ESI
+		MOVL Y(%EAX), %EDI
+		ADDL %ESI, %EDI
+		MOVL %EDI, Y(%EAX)
 
 		#Check if missile is out of bounds
 		MOVL Y(%EAX), %EBX
@@ -255,7 +268,7 @@ update_missiles:
 		CMPL $0, %EBX
 		JL update_OB_missile
 		CMPL $79, %EBX
-		JL update_OB_missile
+		JG update_OB_missile
 
 		#Otherwise update missile
 		PUSHL %EAX
@@ -311,12 +324,15 @@ calc_vid_offset:
 		XOR %EAX, %EAX
 		MOVL 12(%EBP), %EAX		#grab y position
 		SHR $16, %EAX
-		IMULL $80, %EAX
-		IMULL $2, %EAX
+		MOVL $80, %ESI
+		IMULL %ESI
+		MOVL $2, %ESI
+		IMULL %ESI
 		MOVL %EAX, %EBX
 		MOVL 8(%EBP), %EAX		#Grab x position
 		SHR $16, %EAX
-		IMULL $2, %EAX
+		MOVL $2, %ESI
+		IMULL %ESI
 		ADDL %EBX, %EAX
 		POPL %EDI
 		POPL %ESI
@@ -411,7 +427,7 @@ missile_exploding:
 		PUSHL %EDI
 		PUSHL %ESI
 		CALL calc_vid_offset
-		MOVB $64, %CL
+		MOVB C(%EBX), %CL
 		CALL mp1_poke
 		ADDL $8, %ESP
 		POPL %EDX
@@ -470,14 +486,12 @@ missile_moving:
 		MOVL X(%EAX), %EBX
 		MOVL VX(%EAX), %ECX
 		SUBL %ECX, %EBX		#Calculate the old x position
-		SHRL $16, %EBX
 		MOVL %EBX, -4(%EBP)	#store the old x position
 
 		MOVL Y(%EAX), %EBX
 		MOVL VY(%EAX), %ECX
 		SUBL %ECX, %EBX		#Calculate the old y position
-		SHRL $16, %EBX
-		MOVL %EBX, -8(%EBP)	#store the old x position
+		MOVL %EBX, -8(%EBP)	#store the old y position
 
 		PUSHL %EAX 			#Calculate the video offset and print space char
 		PUSHL %ECX
@@ -493,10 +507,10 @@ missile_moving:
 		POPL %EAX
 
 		#Print the new missile
-		MOVL X(%EAX), %EBX
-		SHRL $16, %EBX		#Put the current x position in ebx
-		MOVL Y(%EAX), %ECX
-		SHRL $16, %ECX		#put the current y positino in ecx
+		MOVL X(%EAX), %EBX		#Put the current x position in ebx
+		MOVL Y(%EAX), %ECX		#put the current y positino in ecx
+
+		MOVL %EAX, %EDI		#Temporarily store eax in edi
 
 		PUSHL %EAX
 		PUSHL %ECX
@@ -504,7 +518,7 @@ missile_moving:
 		PUSHL %ECX
 		PUSHL %EBX
 		CALL calc_vid_offset
-		MOVB $65, %CL
+		MOVB C(%EDI), %CL
 		CALL mp1_poke
 		ADDL $8, %ESP
 		POPL %EDX
