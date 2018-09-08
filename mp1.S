@@ -110,18 +110,111 @@ list_loop:
 
 .globl mp1_ioctl
 mp1_ioctl:
-		ret
+		PUSHL %EBP
+		MOVL %ESP, %EBP
+		PUSHL %EBX
+		PUSHL %ESI
+		PUSHL %EDI
 
+		MOVL 12(%EBP), %EBX
+		MOVL 8(%EBP), %ECX
+		PUSHL %EAX
+		PUSHL %ECX
+		PUSHL %EDX
+		PUSHL %ECX
+		CALL *jumptable(, %EBX, 4)
+		ADDL $4, %ESP
+		POPL %EDX
+		POPL %ECX
+		ADDL $4, %ESP
 
+ioctl_done:
+		POPL %EDI
+		POPL %ESI
+		POPL %EBX
+		LEAVE
+		RET
 # ----------------- Functions private to this file -------------------
 
 
 
 mp1_ioctl_startgame:
-		ret
+		PUSHL %EBP
+		MOVL %ESP, %EBP
+		PUSHL %EBX
+		PUSHL %ESI
+		PUSHL %EDI
+
+		#Create the head pointer of the linked list
+		PUSHL %EAX
+		PUSHL %ECX
+		PUSHL %EDX
+		PUSHL $36
+		CALL mp1_malloc
+		ADDL $4, %ESP
+		POPL %EDX
+		POPL %ECX
+		ADDL $4, %ESP
+
+		MOVL %EAX, mp1_missile_list
+
+		MOVL $7, %EAX
+		MOVL %EAX, base_alive
+		MOVL $40, %EAX
+		MOVL %EAX, crosshairs_x
+		MOVL $12, %EAX
+		MOVL %EAX, crosshairs_y
+
+		POPL %EDI
+		POPL %ESI
+		POPL %EBX
+		LEAVE
+		RET
 
 mp1_ioctl_addmissile:
-		ret
+		PUSHL %EBP
+		MOVL %ESP, %EBP
+		PUSHL %EBX
+		PUSHL %ESI
+		PUSHL %EDI
+
+		MOVL 8(%EBP), %EBX
+
+		#Allocate kernel space
+		PUSHL %EAX
+		PUSHL %ECX
+		PUSHL %EDX
+		PUSHL $36
+		CALL mp1_malloc
+		ADDL $4, %ESP
+		POPL %EDX
+		POPL %ECX
+		ADDL $4, %ESP
+
+		MOVL %EAX, %EDX 		#EDX holds pointer to new missile
+
+		#Now call memcopy
+		PUSHL %EAX
+		PUSHL %ECX
+		PUSHL %EDX
+		PUSHL $36
+		PUSHL %EBX
+		PUSHL %EAX
+		CALL mp1_copy_from_user
+		ADDL $12, %ESP
+		POPL %EDX
+		POPL %ECX
+		ADDL $4, %ESP		#EAX holds how many bites could not be copied
+
+		MOVL mp1_missile_list, %EDI
+		MOVL %EDI, NEXT(%EDX)
+		MOVL %EDX, mp1_missile_list
+
+		POPL %EDI
+		POPL %ESI
+		POPL %EBX
+		LEAVE
+		RET
 
 mp1_ioctl_movexhairs:
 		ret
@@ -131,6 +224,10 @@ mp1_ioctl_getstatus:
 
 mp1_ioctl_endgame:
 		ret
+
+jumptable:
+		.long mp1_ioctl_startgame, mp1_ioctl_addmissile, mp1_ioctl_movexhairs, mp1_ioctl_getstatus, mp1_ioctl_endgame
+
 
 #void update_missiles(struct * missile)
 update_missiles:
@@ -205,18 +302,20 @@ update_OB_missile:
 
 # long int calc_vid_offset(int x, int y)
 calc_vid_offset:
-		PUSHL %EBX
-		MOVL %ESP, %EBX
+		PUSHL %EBP
+		MOVL %ESP, %EBP
 		PUSHL %EBX
 		PUSHL %ESI
 		PUSHL %EDI
 
 		XOR %EAX, %EAX
 		MOVL 12(%EBP), %EAX		#grab y position
+		SHR $16, %EAX
 		IMULL $80, %EAX
 		IMULL $2, %EAX
 		MOVL %EAX, %EBX
 		MOVL 8(%EBP), %EAX		#Grab x position
+		SHR $16, %EAX
 		IMULL $2, %EAX
 		ADDL %EBX, %EAX
 		POPL %EDI
@@ -312,7 +411,7 @@ missile_exploding:
 		PUSHL %EDI
 		PUSHL %ESI
 		CALL calc_vid_offset
-		MOVB EXPLOSION, %CL
+		MOVB $64, %CL
 		CALL mp1_poke
 		ADDL $8, %ESP
 		POPL %EDX
@@ -394,18 +493,18 @@ missile_moving:
 		POPL %EAX
 
 		#Print the new missile
-		MOVL X(%EAX), %EAX
-		SHRL $16, %EAX		#Put the current x position in eax
-		MOVL Y(%EAX), %EBX
-		SHRL $16, %EBX		#put the current y positino in ebx
+		MOVL X(%EAX), %EBX
+		SHRL $16, %EBX		#Put the current x position in ebx
+		MOVL Y(%EAX), %ECX
+		SHRL $16, %ECX		#put the current y positino in ecx
 
 		PUSHL %EAX
 		PUSHL %ECX
 		PUSHL %EDX
+		PUSHL %ECX
 		PUSHL %EBX
-		PUSHL %EAX
 		CALL calc_vid_offset
-		MOVB C, %CL
+		MOVB $65, %CL
 		CALL mp1_poke
 		ADDL $8, %ESP
 		POPL %EDX
