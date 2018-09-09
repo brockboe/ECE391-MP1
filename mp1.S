@@ -137,19 +137,27 @@ list_loop_done:
 mp1_ioctl:
 		PUSHL %EBP
 		MOVL %ESP, %EBP
+		ADDL $-4, %ESP
 		PUSHL %EBX
 		PUSHL %ESI
 		PUSHL %EDI
 
 		MOVL 12(%EBP), %EBX
+		CMPL $4, %EBX
+		JA mp1_ioctl_cmd_error
 		JMP *jumptable(, %EBX, 4)
 
 ioctl_done:
+		ADDL $4, %ESP
 		POPL %EDI
 		POPL %ESI
 		POPL %EBX
 		LEAVE
 		RET
+
+mp1_ioctl_cmd_error:
+		MOVL $-1, %EAX
+		JMP ioctl_done
 # ----------------- Functions private to this file -------------------
 
 
@@ -308,11 +316,32 @@ mp1_ioctl_getstatus:
 		MOVL base_alive, %EBX
 		SHLL $16, %EBX
 		ADDL %EBX, %EAX
+		MOVL %EAX, -4(%EBP)
 
+		LEAL -4(%EBP), %EBX
 		MOVL 8(%EBP), %ECX
-		MOVL %EAX, (%ECX)
 
+		PUSHL %EAX
+		PUSHL %ECX
+		PUSHL %EDX
+		PUSHL $4
+		PUSHL %EBX
+		PUSHL %ECX
+		CALL mp1_copy_to_user
+		ADDL $12, %ESP
+		POPL %EDX
+		POPL %ECX
+		ADDL $4, %ESP
+
+		CMP $0, %EAX
+		JNE getstatus_fail
+		MOVL $0, %EAX
 		JMP ioctl_done
+
+getstatus_fail:
+		MOVL $-1, %EAX
+		JMP ioctl_done
+
 
 mp1_ioctl_endgame:
 		ret
