@@ -73,15 +73,19 @@ mp1_poke:
 mp1_rtc_tasklet:
 		PUSHL %EBP
 		MOVL %ESP, %EBP
+		ADDL $-4, %ESP
 		PUSHL %EBX
 		PUSHL %ESI
 		PUSHL %EDI
 
 		#Begin by going through the missile list and updating everything
 		MOVL mp1_missile_list, %EAX
+		MOVL %EAX, -4(%EBP)
 		CMPL $0, %EAX
 		JE list_loop_done
 list_loop:
+		MOVL NEXT(%EAX), %EBX
+		MOVL %EBX, -4(%EBP)
 		PUSHL %EAX
 		PUSHL %ESI
 		PUSHL %EDI
@@ -91,7 +95,7 @@ list_loop:
 		POPL %EDI
 		POPL %ESI
 		POPL %EAX
-		MOVL NEXT(%EAX), %EAX
+		MOVL -4(%EBP), %EAX
 		CMPL $0, %EAX
 		JNE list_loop
 list_loop_done:
@@ -113,6 +117,7 @@ list_loop_done:
 		POPL %ECX
 		POPL %EAX
 
+		ADDL $4, %ESP
 		POPL %EDI
 		POPL %ESI
 		POPL %EBX
@@ -137,16 +142,7 @@ mp1_ioctl:
 		PUSHL %EDI
 
 		MOVL 12(%EBP), %EBX
-		MOVL 8(%EBP), %ECX
-		PUSHL %EAX
-		PUSHL %ECX
-		PUSHL %EDX
-		PUSHL %ECX
-		CALL *jumptable(, %EBX, 4)
-		ADDL $4, %ESP
-		POPL %EDX
-		POPL %ECX
-		ADDL $4, %ESP
+		JMP *jumptable(, %EBX, 4)
 
 ioctl_done:
 		POPL %EDI
@@ -159,25 +155,6 @@ ioctl_done:
 
 
 mp1_ioctl_startgame:
-		PUSHL %EBP
-		MOVL %ESP, %EBP
-		PUSHL %EBX
-		PUSHL %ESI
-		PUSHL %EDI
-
-		#Create the head pointer of the linked list
-		PUSHL %EAX
-		PUSHL %ECX
-		PUSHL %EDX
-		PUSHL $33
-		CALL mp1_malloc
-		ADDL $4, %ESP
-		POPL %EDX
-		POPL %ECX
-		ADDL $4, %ESP
-
-		MOVL %EAX, mp1_missile_list
-
 		MOVL $7, %EAX
 		MOVL %EAX, base_alive
 		MOVL $40, %EAX
@@ -185,19 +162,9 @@ mp1_ioctl_startgame:
 		MOVL $12, %EAX
 		MOVL %EAX, crosshairs_y
 
-		POPL %EDI
-		POPL %ESI
-		POPL %EBX
-		LEAVE
-		RET
+		JMP ioctl_done
 
 mp1_ioctl_addmissile:
-		PUSHL %EBP
-		MOVL %ESP, %EBP
-		PUSHL %EBX
-		PUSHL %ESI
-		PUSHL %EDI
-
 		MOVL 8(%EBP), %EBX
 
 		#Allocate kernel space
@@ -237,11 +204,7 @@ mp1_ioctl_addmissile:
 		MOVL $0, %EAX
 
 addmissile_done:
-		POPL %EDI
-		POPL %ESI
-		POPL %EBX
-		LEAVE
-		RET
+		JMP ioctl_done
 
 malloc_fail:
 		MOVL $-1, %EAX
@@ -260,12 +223,6 @@ copy_fail:
 		JMP addmissile_done
 
 mp1_ioctl_movexhairs:
-		PUSHL %EBP
-		MOVL %ESP, %EBP
-		PUSHL %EBX
-		PUSHL %ESI
-		PUSHL %EDI
-
 		#Begin by clearing the memlocation of the old crosshair
 		PUSHL %EAX 			#Calculate the video offset and print space char
 		PUSHL %ECX
@@ -325,11 +282,7 @@ movexhair_ydone:
 		POPL %ECX
 		POPL %EAX
 
-		POPL %EDI
-		POPL %ESI
-		POPL %EBX
-		LEAVE
-		RET
+		JMP ioctl_done
 
 x_lessthan0:
 		MOVL $0, %EAX
@@ -350,11 +303,6 @@ y_greaterthan24:
 
 
 mp1_ioctl_getstatus:
-		PUSHL %EBP
-		MOVL %ESP, %EBP
-		PUSHL %EBX
-		PUSHL %ESI
-		PUSHL %EDI
 
 		MOVL mp1_score, %EAX
 		MOVL base_alive, %EBX
@@ -364,11 +312,7 @@ mp1_ioctl_getstatus:
 		MOVL 8(%EBP), %ECX
 		MOVL %EAX, (%ECX)
 
-		POPL %EDI
-		POPL %ESI
-		POPL %EBX
-		LEAVE
-		RET
+		JMP ioctl_done
 
 mp1_ioctl_endgame:
 		ret
@@ -385,8 +329,21 @@ update_missiles:
 		PUSHL %ESI
 		PUSHL %EDI
 
-		MOVL 8(%EBP), %EAB
+		MOVL 8(%EBP), %EAX
 		#Check if missile is exploding
+
+		PUSHL %EAX 			#Calculate the video offset and print space char
+		PUSHL %ECX
+		PUSHL %EDX
+		PUSHL Y(%EAX)
+		PUSHL X(%EAX)
+		CALL calc_vid_offset
+		MOVB $32, %CL
+		CALL mp1_poke
+		ADDL $8, %ESP
+		POPL %EDX
+		POPL %ECX
+		POPL %EAX
 
 		CMPL $0, %EAX
 		JE update_missiles_done
@@ -615,18 +572,16 @@ dont_notify_user:
 		MOVL EXPLODED(%EBX), %ECX	#Decrement exploded value
 		SUBL $1, %ECX
 		MOVL %ECX, EXPLODED(%EBX)
-		CMPL $1, %ECX			#check if explosion = 0
+		CMPL $0, %ECX			#check if explosion = 0
 		JNE missile_exploding_done
 
 
 		#Clear the missile's screen location
-		MOVL X(%EBX), %ESI
-		MOVL Y(%EBX), %EDI
 		PUSHL %EAX
 		PUSHL %ECX
 		PUSHL %EDX
-		PUSHL %EDI
-		PUSHL %ESI
+		PUSHL Y(%EBX)
+		PUSHL X(%EBX)
 		CALL calc_vid_offset
 		MOVB $32, %CL
 		CALL mp1_poke
@@ -730,12 +685,12 @@ delete_missile:
 		PUSHL %EDI
 
 		MOVL 8(%EBP), %EAX	#Put the target missile pointer into eax
+		MOVL NEXT(%EAX), %EDI
+		MOVL %EDI, -4(%EBP)	#Move the after missile pointer into memory
+
 		MOVL mp1_missile_list, %EBX
 		CMP %EBX, %EAX
 		JE head_missile		#Check if missile to be deleted is head missile
-
-		MOVL NEXT(%EAX), %EDI
-		MOVL %EDI, -4(%EBP)	#Move the after missile pointer into memory
 
 		MOVL mp1_missile_list, %EBX
 		MOVL %EBX, -8(%EBP)	#Store the missile before in memory
@@ -746,7 +701,7 @@ delete_missile:
 grab_prior_missile:
 		MOVL -8(%EBP), %EBX
 		MOVL NEXT(%EBX), %EDI
-		CMP %EDI, %EAX
+		CMPL %EDI, %EAX
 		JE got_prior_missile
 		MOVL NEXT(%EBX), %EBX
 		MOVL %EBX, -8(%EBP)
@@ -754,7 +709,7 @@ grab_prior_missile:
 
 got_prior_missile:
 		MOVL -4(%EBP), %EBX
-		CMP $0, %EBX		#If the after missile is a null pointer,it's the end of the list
+		CMPL $0, %EBX		#If the after missile is a null pointer,it's the end of the list
 		JE tail_missile
 
 middle_missile:
