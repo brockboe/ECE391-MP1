@@ -95,6 +95,24 @@ list_loop:
 		CMPL $0, %EAX
 		JNE list_loop
 list_loop_done:
+
+		PUSHL %EAX 			#Calculate the video offset and print the xhair
+		PUSHL %ECX
+		PUSHL %EDX
+		MOVL crosshairs_y, %ECX
+		SHLL $16, %ECX
+		PUSHL %ECX
+		MOVL crosshairs_x, %ECX
+		SHLL $16, %ECX
+		PUSHL %ECX
+		CALL calc_vid_offset
+		MOVB $88, %CL
+		CALL mp1_poke
+		ADDL $8, %ESP
+		POPL %EDX
+		POPL %ECX
+		POPL %EAX
+
 		POPL %EDI
 		POPL %ESI
 		POPL %EBX
@@ -151,7 +169,7 @@ mp1_ioctl_startgame:
 		PUSHL %EAX
 		PUSHL %ECX
 		PUSHL %EDX
-		PUSHL $36
+		PUSHL $33
 		CALL mp1_malloc
 		ADDL $4, %ESP
 		POPL %EDX
@@ -186,7 +204,7 @@ mp1_ioctl_addmissile:
 		PUSHL %EAX
 		PUSHL %ECX
 		PUSHL %EDX
-		PUSHL $36
+		PUSHL $33
 		CALL mp1_malloc
 		ADDL $4, %ESP
 		POPL %EDX
@@ -194,12 +212,14 @@ mp1_ioctl_addmissile:
 		ADDL $4, %ESP
 
 		MOVL %EAX, %EDX 		#EDX holds pointer to new missile
+		CMP $0, %EAX
+		JE malloc_fail
 
 		#Now call memcopy
 		PUSHL %EAX
 		PUSHL %ECX
 		PUSHL %EDX
-		PUSHL $36
+		PUSHL $33
 		PUSHL %EBX
 		PUSHL %EAX
 		CALL mp1_copy_from_user
@@ -208,9 +228,102 @@ mp1_ioctl_addmissile:
 		POPL %ECX
 		ADDL $4, %ESP		#EAX holds how many bites could not be copied
 
+		CMP $0, %EAX
+		JNE copy_fail
+
 		MOVL mp1_missile_list, %EDI
 		MOVL %EDI, NEXT(%EDX)
 		MOVL %EDX, mp1_missile_list
+		MOVL $0, %EAX
+
+addmissile_done:
+		POPL %EDI
+		POPL %ESI
+		POPL %EBX
+		LEAVE
+		RET
+
+malloc_fail:
+		MOVL $-1, %EAX
+		JMP addmissile_done
+copy_fail:
+		PUSHL %EAX
+		PUSHL %ECX
+		PUSHL %EDX
+		PUSHL %EDX
+		CALL mp1_free
+		ADDL $4, %ESP
+		POPL %EDX
+		POPL %ECX
+		POPL %EAX
+		MOVL $-1, %EAX
+		JMP addmissile_done
+
+mp1_ioctl_movexhairs:
+		PUSHL %EBP
+		MOVL %ESP, %EBP
+		PUSHL %EBX
+		PUSHL %ESI
+		PUSHL %EDI
+
+		#Begin by clearing the memlocation of the old crosshair
+		PUSHL %EAX 			#Calculate the video offset and print space char
+		PUSHL %ECX
+		PUSHL %EDX
+		MOVL crosshairs_y, %ECX
+		SHLL $16, %ECX
+		PUSHL %ECX
+		MOVL crosshairs_x, %ECX
+		SHLL $16, %ECX
+		PUSHL %ECX
+		CALL calc_vid_offset
+		MOVB $32, %CL
+		CALL mp1_poke
+		ADDL $8, %ESP
+		POPL %EDX
+		POPL %ECX
+		POPL %EAX
+
+		MOVL 8(%EBP), %EBX	#Load the crosshair change into ebx
+		SHLL $16, %EBX
+		SARL $16, %EBX
+		MOVL crosshairs_x, %EAX
+		ADDL %EBX, %EAX
+		CMPL $0, %EAX
+		JL x_lessthan0
+		CMPL $79, %EAX
+		JG x_greaterthan79
+		MOVL %EAX, crosshairs_x
+movexhair_xdone:
+		MOVL 8(%EBP), %EBX
+		SAR $16, %EBX		#ebx now contains y change
+		MOVL crosshairs_y, %EAX
+		ADDL %EBX, %EAX
+		CMPL $0, %EAX
+		JL y_lessthan0
+		CMPL $24, %EAX
+		JG y_greaterthan24
+		MOVL %EAX, crosshairs_y
+
+movexhair_ydone:
+		MOVL $0, %EAX
+
+		PUSHL %EAX 			#Calculate the video offset and print X char
+		PUSHL %ECX
+		PUSHL %EDX
+		MOVL crosshairs_y, %ECX
+		SHLL $16, %ECX
+		PUSHL %ECX
+		MOVL crosshairs_x, %ECX
+		SHLL $16, %ECX
+		PUSHL %ECX
+		CALL calc_vid_offset
+		MOVB $88, %CL
+		CALL mp1_poke
+		ADDL $8, %ESP
+		POPL %EDX
+		POPL %ECX
+		POPL %EAX
 
 		POPL %EDI
 		POPL %ESI
@@ -218,11 +331,44 @@ mp1_ioctl_addmissile:
 		LEAVE
 		RET
 
-mp1_ioctl_movexhairs:
-		ret
+x_lessthan0:
+		MOVL $0, %EAX
+		MOVL %EAX, crosshairs_x
+		JMP movexhair_xdone
+x_greaterthan79:
+		MOVL $79, %EAX
+		MOVL %EAX, crosshairs_x
+		JMP movexhair_xdone
+y_lessthan0:
+		MOVL $0, %EAX
+		MOVL %EAX, crosshairs_y
+		JMP movexhair_ydone
+y_greaterthan24:
+		MOVL $24, %EAX
+		MOVL %EAX, crosshairs_y
+		JMP movexhair_ydone
+
 
 mp1_ioctl_getstatus:
-		ret
+		PUSHL %EBP
+		MOVL %ESP, %EBP
+		PUSHL %EBX
+		PUSHL %ESI
+		PUSHL %EDI
+
+		MOVL mp1_score, %EAX
+		MOVL base_alive, %EBX
+		SHLL $16, %EBX
+		ADDL %EBX, %EAX
+
+		MOVL 8(%EBP), %ECX
+		MOVL %EAX, (%ECX)
+
+		POPL %EDI
+		POPL %ESI
+		POPL %EBX
+		LEAVE
+		RET
 
 mp1_ioctl_endgame:
 		ret
@@ -239,11 +385,15 @@ update_missiles:
 		PUSHL %ESI
 		PUSHL %EDI
 
-		MOVL 8(%EBP), %EAX
+		MOVL 8(%EBP), %EAB
 		#Check if missile is exploding
-		MOVW EXPLODED(%EAX), %BX
-		CMPW $0, %BX
-		JG update_explode_missile
+
+		CMPL $0, %EAX
+		JE update_missiles_done
+
+		MOVL EXPLODED(%EAX), %EBX
+		CMPL $0, %EBX
+		JG update_position_done
 
 		#Move the missile
 		MOVL VX(%EAX), %ESI
@@ -256,6 +406,7 @@ update_missiles:
 		ADDL %ESI, %EDI
 		MOVL %EDI, Y(%EAX)
 
+update_position_done:
 		#Check if missile is out of bounds
 		MOVL Y(%EAX), %EBX
 		SHRL $16, %EBX
@@ -270,6 +421,25 @@ update_missiles:
 		CMPL $79, %EBX
 		JG update_OB_missile
 
+		#Check if missile has reached its destination
+		#or is currently exploding
+		MOVL EXPLODED(%EAX), %EBX
+		CMPL $0, %EBX
+		JG update_explode_missile
+
+		MOVL X(%EAX), %EDI
+		SHRL $16, %EDI
+		MOVL DEST_X(%EAX), %ESI
+		CMPL %EDI, %ESI
+		JNE skip_explode
+		MOVL Y(%EAX), %EDI
+		SHRL $16, %EDI
+		MOVL DEST_Y(%EAX), %ESI
+		CMPL %EDI, %ESI
+		JNE skip_explode
+		JMP update_explode_missile
+
+skip_explode:
 		#Otherwise update missile
 		PUSHL %EAX
 		PUSHL %ECX
@@ -343,8 +513,8 @@ calc_vid_offset:
 # void missile_offscreen(struct * missile)
 # Local Variables	:	Old X (ebp-4), Old Y (ebp-8)
 missile_offscreen:
-		PUSHL %EBX
-		MOVL %ESP, %EBX
+		PUSHL %EBP
+		MOVL %ESP, %EBP
 		ADDL $-8, %ESP		#save space for local vars
 		PUSHL %EBX
 		PUSHL %ESI
@@ -406,16 +576,24 @@ missile_exploding:
 		PUSHL %EAX
 		PUSHL %ECX
 		PUSHL %EDX
-		PUSHL %EBX
+		PUSHL 8(%EBP)
 		CALL missile_explode
 		ADDL $4, %ESP
 		POPL %EDX
 		POPL %ECX
+		ADDL $4, %ESP
+
+		CMPL $0, %EAX
+		JE dont_notify_user
+		PUSHL %EAX
+		PUSHL %ECX
+		PUSHL %EDX
+		CALL mp1_notify_user
+		POPL %EDX
+		POPL %ECX
 		POPL %EAX
 
-		MOVL EXPLODED(%EBX), %ECX	#Decrement exploded value
-		SUBL $1, %ECX
-		MOVL %ECX, EXPLODED(%EBX)
+dont_notify_user:
 
 		MOVL X(%EBX), %ESI
 		MOVL Y(%EBX), %EDI
@@ -427,15 +605,19 @@ missile_exploding:
 		PUSHL %EDI
 		PUSHL %ESI
 		CALL calc_vid_offset
-		MOVB C(%EBX), %CL
+		MOVB $64, %CL
 		CALL mp1_poke
 		ADDL $8, %ESP
 		POPL %EDX
 		POPL %ECX
 		POPL %EAX
 
-		CMPL $0, %ECX			#check if explosion = 0
+		MOVL EXPLODED(%EBX), %ECX	#Decrement exploded value
+		SUBL $1, %ECX
+		MOVL %ECX, EXPLODED(%EBX)
+		CMPL $1, %ECX			#check if explosion = 0
 		JNE missile_exploding_done
+
 
 		#Clear the missile's screen location
 		MOVL X(%EBX), %ESI
@@ -457,7 +639,7 @@ missile_exploding:
 		PUSHL %EAX
 		PUSHL %ECX
 		PUSHL %EDX
-		PUSHL %EBX
+		PUSHL 8(%EBP)
 		CALL delete_missile
 		ADDL $4, %ESP
 		POPL %EDX
@@ -525,6 +707,7 @@ missile_moving:
 		POPL %ECX
 		POPL %EAX
 
+		ADDL $8, %ESP
 		POPL %EDI
 		POPL %ESI
 		POPL %EBX
@@ -581,7 +764,7 @@ middle_missile:
 		PUSHL %EAX
 		PUSHL %ECX
 		PUSHL %EDX
-		PUSHL %EAX
+		PUSHL 8(%EBP)
 		CALL mp1_free
 		ADDL $4, %ESP
 		POPL %EDX
@@ -595,7 +778,7 @@ tail_missile:
 		PUSHL %EAX
 		PUSHL %ECX
 		PUSHL %EDX
-		PUSHL %EAX
+		PUSHL 8(%EBP)
 		CALL mp1_free
 		ADDL $4, %ESP
 		POPL %EDX
@@ -604,12 +787,13 @@ tail_missile:
 		JMP delete_done
 
 head_missile:
+		MOVL 8(%EBP), %EBX
 		MOVL NEXT(%EBX), %ECX
 		MOVL %ECX, mp1_missile_list
 		PUSHL %EAX
 		PUSHL %ECX
 		PUSHL %EDX
-		PUSHL %EAX
+		PUSHL 8(%EBP)
 		CALL mp1_free
 		ADDL $4, %ESP
 		POPL %EDX
@@ -621,6 +805,5 @@ delete_done:
 		POPL %EDI
 		POPL %ESI
 		POPL %EBX
-		ADD $8, %ESP
 		LEAVE
 		RET
