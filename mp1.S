@@ -100,6 +100,15 @@ list_loop:
 		JNE list_loop
 list_loop_done:
 
+		#Print the bases
+		PUSHL %EAX
+		PUSHL %ECX
+		PUSHL %EDX
+		CALL print_all_bases
+		POPL %EDX
+		POPL %ECX
+		POPL %EAX
+
 		PUSHL %EAX 			#Calculate the video offset and print the xhair
 		PUSHL %ECX
 		PUSHL %EDX
@@ -163,7 +172,7 @@ mp1_ioctl_cmd_error:
 
 
 mp1_ioctl_startgame:
-		MOVL $7, %EAX
+		MOVL $0x00FFFFFF, %EAX
 		MOVL %EAX, base_alive
 		MOVL $40, %EAX
 		MOVL %EAX, crosshairs_x
@@ -313,9 +322,27 @@ y_greaterthan24:
 mp1_ioctl_getstatus:
 
 		MOVL mp1_score, %EAX
+
+base0_check:
 		MOVL base_alive, %EBX
-		SHLL $16, %EBX
-		ADDL %EBX, %EAX
+		ANDL $0x000000FF, %EBX
+		CMPL $0, %EBX
+		JE base1_check
+		ADDL $0x00010000, %EAX
+base1_check:
+		MOVL base_alive, %EBX
+		ANDL $0x0000FF00, %EBX
+		CMPL $0, %EBX
+		JE base2_check
+		ADDL $0x00020000, %EAX
+base2_check:
+		MOVL base_alive, %EBX
+		ANDL $0x00FF0000, %EBX
+		CMPL $0, %EBX
+		JE base_check_done
+		ADDL $0x00040000, %EAX
+
+base_check_done:
 		MOVL %EAX, -4(%EBP)
 
 		LEAL -4(%EBP), %EBX
@@ -344,11 +371,179 @@ getstatus_fail:
 
 
 mp1_ioctl_endgame:
-		ret
+		MOVL mp1_missile_list, %EAX
+		CMPL $0, %EAX
+		JE endgame_done
+		MOVL NEXT(%EAX), %EBX
+		MOVL %EBX, mp1_missile_list
+
+		PUSHL %EAX
+		PUSHL %ECX
+		PUSHL %EDX
+		PUSHL %EAX
+		CALL mp1_free
+		ADDL $4, %ESP
+		POPL %EDX
+		POPL %ECX
+		POPL %EAX
+
+		JMP mp1_ioctl_endgame
+
+endgame_done:
+		JMP ioctl_done
 
 jumptable:
 		.long mp1_ioctl_startgame, mp1_ioctl_addmissile, mp1_ioctl_movexhairs, mp1_ioctl_getstatus, mp1_ioctl_endgame
 
+print_all_bases:
+		PUSHL %EBP
+		MOVL %ESP, %EBP
+		PUSHL %EBX
+		PUSHL %ESI
+		PUSHL %EDI
+
+		MOVL base_alive, %EAX
+		ANDL $0x000000FF, %EAX
+		CMPL $0, %EAX
+		JE base0_dead
+base0_alive:
+		LEAL base_pic, %EAX
+		PUSHL %EAX
+		PUSHL %ECX
+		PUSHL %EDX
+		PUSHL %EAX
+		PUSHL $18
+		CALL print_base
+		ADDL $8, %ESP
+		POPL %EDX
+		POPL %ECX
+		POPL %EAX
+		JMP base0_done
+base0_dead:
+		LEAL dead_base_pic, %EAX
+		PUSHL %EAX
+		PUSHL %ECX
+		PUSHL %EDX
+		PUSHL %EAX
+		PUSHL $18
+		CALL print_base
+		ADDL $8, %ESP
+		POPL %EDX
+		POPL %ECX
+		POPL %EAX
+		JMP base0_done
+base0_done:
+		MOVL base_alive, %EAX
+		ANDL $0x0000FF00, %EAX
+		CMPL $0, %EAX
+		JE base1_dead
+base1_alive:
+		LEAL base_pic, %EAX
+		PUSHL %EAX
+		PUSHL %ECX
+		PUSHL %EDX
+		PUSHL %EAX
+		PUSHL $36
+		CALL print_base
+		ADDL $8, %ESP
+		POPL %EDX
+		POPL %ECX
+		POPL %EAX
+		JMP base1_done
+base1_dead:
+		LEAL dead_base_pic, %EAX
+		PUSHL %EAX
+		PUSHL %ECX
+		PUSHL %EDX
+		PUSHL %EAX
+		PUSHL $36
+		CALL print_base
+		ADDL $8, %ESP
+		POPL %EDX
+		POPL %ECX
+		POPL %EAX
+		JMP base1_done
+base1_done:
+		MOVL base_alive, %EAX
+		ANDL $0x00FF0000, %EAX
+		CMPL $0, %EAX
+		JE base2_dead
+base2_alive:
+		LEAL base_pic, %EAX
+		PUSHL %EAX
+		PUSHL %ECX
+		PUSHL %EDX
+		PUSHL %EAX
+		PUSHL $58
+		CALL print_base
+		ADDL $8, %ESP
+		POPL %EDX
+		POPL %ECX
+		POPL %EAX
+		JMP base2_done
+base2_dead:
+		LEAL dead_base_pic, %EAX
+		PUSHL %EAX
+		PUSHL %ECX
+		PUSHL %EDX
+		PUSHL %EAX
+		PUSHL $58
+		CALL print_base
+		ADDL $8, %ESP
+		POPL %EDX
+		POPL %ECX
+		POPL %EAX
+		JMP base2_done
+base2_done:
+
+		POPL %EDI
+		POPL %ESI
+		POPL %EBX
+		LEAVE
+		RET
+
+# void print_base(int x_pos, int * basepic)
+print_base:
+		PUSHL %EBP
+		MOVL %ESP, %EBP
+		PUSHL %EBX
+		PUSHL %ESI
+		PUSHL %EDI
+
+		MOVL 12(%EBP), %EDI
+		MOVL 8(%EBP), %EBX
+		MOVL $5, %EDX
+
+base_print_loop:
+		PUSHL %EAX
+		PUSHL %ECX
+		PUSHL %EDX
+
+		MOVL $24, %ESI
+		SHLL $16, %ESI
+		PUSHL %ESI
+		MOVL %EBX, %ESI
+		SHLL $16, %ESI
+		PUSHL %ESI
+		CALL calc_vid_offset
+		MOVB (%EDI), %CL
+		CALL mp1_poke
+		ADDL $8, %ESP
+		POPL %EDX
+		POPL %ECX
+		POPL %EAX
+
+		ADDL $1, %EDI
+		ADDL $1, %EBX
+		ADDL $-1, %EDX
+		CMPL $0, %EDX
+		JNE base_print_loop
+
+		POPL %EDI
+		POPL %ESI
+		POPL %EBX
+		LEAVE
+		RET
 
 #void update_missiles(struct * missile)
 update_missiles:
