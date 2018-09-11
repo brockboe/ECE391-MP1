@@ -1,6 +1,10 @@
 
 # mp1.S - missile-command version
-# Good luck, and have fun!
+# ECE 391 MP1, Fall 2018
+# Brock Boehler
+#
+# The following code implements, in x86 assembly, all the functions necessary
+# for a simplified missile-command game.
 
 .data
 
@@ -833,6 +837,13 @@ missile_exploding_done:
 		RET
 
 # void missile_moving(struct * missile)
+# This function takes a missile as input and performs the necessary
+# operations to move it from it's old position. It erases the missile from the
+# old position and re-draws it in it's new position, even if the new position
+# and the old position are the same.
+# Inputs		:	A pointer to a missile structure
+# Outputs		:	none
+# Registers		:	Standards C calling convention
 # Local Variables	:	Old X (ebp-4), Old Y (ebp-8)
 missile_moving:
 		PUSHL %EBP
