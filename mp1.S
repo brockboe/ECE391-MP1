@@ -157,6 +157,20 @@ list_loop_done:
 
 .globl mp1_ioctl
 mp1_ioctl:
+		MOVL 8(%ESP), %EAX
+		CMPL $CMD_MAX, %EAX
+		JA mp1_ioctl_cmd_error
+		JMP *jumptable(, %EAX, 4)
+
+ioctl_done:
+		POPL %EDI
+		POPL %ESI
+		POPL %EBX
+		ADDL $4, %ESP
+		LEAVE
+		RET
+
+mp1_ioctl_cmd_error:
 		PUSHL %EBP
 		MOVL %ESP, %EBP
 		ADDL $-4, %ESP
@@ -164,20 +178,6 @@ mp1_ioctl:
 		PUSHL %ESI
 		PUSHL %EDI
 
-		MOVL 12(%EBP), %EBX
-		CMPL $CMD_MAX, %EBX
-		JA mp1_ioctl_cmd_error
-		JMP *jumptable(, %EBX, 4)
-
-ioctl_done:
-		ADDL $4, %ESP
-		POPL %EDI
-		POPL %ESI
-		POPL %EBX
-		LEAVE
-		RET
-
-mp1_ioctl_cmd_error:
 		MOVL $-1, %EAX
 		JMP ioctl_done
 # ----------------- Functions private to this file -------------------
@@ -185,6 +185,13 @@ mp1_ioctl_cmd_error:
 
 
 mp1_ioctl_startgame:
+		PUSHL %EBP
+		MOVL %ESP, %EBP
+		ADDL $-4, %ESP
+		PUSHL %EBX
+		PUSHL %ESI
+		PUSHL %EDI
+
 		MOVL $0x00FFFFFF, %EAX
 		MOVL %EAX, base_alive
 		MOVL $40, %EAX
@@ -195,6 +202,13 @@ mp1_ioctl_startgame:
 		JMP ioctl_done
 
 mp1_ioctl_addmissile:
+		PUSHL %EBP
+		MOVL %ESP, %EBP
+		ADDL $-4, %ESP
+		PUSHL %EBX
+		PUSHL %ESI
+		PUSHL %EDI
+
 		MOVL 8(%EBP), %EBX
 
 		#Allocate kernel space
@@ -253,6 +267,13 @@ copy_fail:
 		JMP addmissile_done
 
 mp1_ioctl_movexhairs:
+		PUSHL %EBP
+		MOVL %ESP, %EBP
+		ADDL $-4, %ESP
+		PUSHL %EBX
+		PUSHL %ESI
+		PUSHL %EDI
+
 		#Begin by clearing the memlocation of the old crosshair
 		PUSHL %EAX 			#Calculate the video offset and print space char
 		PUSHL %ECX
@@ -333,6 +354,12 @@ y_greaterthan24:
 
 
 mp1_ioctl_getstatus:
+		PUSHL %EBP
+		MOVL %ESP, %EBP
+		ADDL $-4, %ESP
+		PUSHL %EBX
+		PUSHL %ESI
+		PUSHL %EDI
 
 		MOVL mp1_score, %EAX
 
@@ -384,6 +411,13 @@ getstatus_fail:
 
 
 mp1_ioctl_endgame:
+		PUSHL %EBP
+		MOVL %ESP, %EBP
+		ADDL $-4, %ESP
+		PUSHL %EBX
+		PUSHL %ESI
+		PUSHL %EDI
+endgame_loop:
 		MOVL mp1_missile_list, %EAX
 		CMPL $0, %EAX
 		JE endgame_done
@@ -400,7 +434,7 @@ mp1_ioctl_endgame:
 		POPL %ECX
 		POPL %EAX
 
-		JMP mp1_ioctl_endgame
+		JMP endgame_loop
 
 endgame_done:
 		JMP ioctl_done
