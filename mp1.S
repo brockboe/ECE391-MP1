@@ -25,6 +25,15 @@
 
 	EXPLOSION = 64
 
+	SPACE_CHAR		= 32
+	MAX_Y			= 24
+	MIN_Y			= 0
+	MAX_X			= 79
+	MIN_X			= 0
+	XHAIR_CHAR		= 88
+	CMD_MAX		= 4
+	STRUCT_SIZE		= 33
+	SCORE_SIZE		= 4
 
 # Data shared between this file and rtc.c helper functions
 
@@ -123,7 +132,7 @@ list_loop_done:
 		SHLL $16, %ECX
 		PUSHL %ECX
 		CALL calc_vid_offset
-		MOVB $88, %CL
+		MOVB $XHAIR_CHAR, %CL
 		CALL mp1_poke
 		ADDL $8, %ESP
 		POPL %EDX
@@ -156,7 +165,7 @@ mp1_ioctl:
 		PUSHL %EDI
 
 		MOVL 12(%EBP), %EBX
-		CMPL $4, %EBX
+		CMPL $CMD_MAX, %EBX
 		JA mp1_ioctl_cmd_error
 		JMP *jumptable(, %EBX, 4)
 
@@ -192,7 +201,7 @@ mp1_ioctl_addmissile:
 		PUSHL %EAX
 		PUSHL %ECX
 		PUSHL %EDX
-		PUSHL $33
+		PUSHL $STRUCT_SIZE
 		CALL mp1_malloc
 		ADDL $4, %ESP
 		POPL %EDX
@@ -207,7 +216,7 @@ mp1_ioctl_addmissile:
 		PUSHL %EAX
 		PUSHL %ECX
 		PUSHL %EDX
-		PUSHL $33
+		PUSHL $STRUCT_SIZE
 		PUSHL %EBX
 		PUSHL %EAX
 		CALL mp1_copy_from_user
@@ -255,7 +264,7 @@ mp1_ioctl_movexhairs:
 		SHLL $16, %ECX
 		PUSHL %ECX
 		CALL calc_vid_offset
-		MOVB $32, %CL
+		MOVB $SPACE_CHAR, %CL
 		CALL mp1_poke
 		ADDL $8, %ESP
 		POPL %EDX
@@ -267,9 +276,9 @@ mp1_ioctl_movexhairs:
 		SARL $16, %EBX
 		MOVL crosshairs_x, %EAX
 		ADDL %EBX, %EAX
-		CMPL $0, %EAX
+		CMPL $MIN_X, %EAX
 		JL x_lessthan0
-		CMPL $79, %EAX
+		CMPL $MAX_X, %EAX
 		JG x_greaterthan79
 		MOVL %EAX, crosshairs_x
 movexhair_xdone:
@@ -277,9 +286,9 @@ movexhair_xdone:
 		SAR $16, %EBX		#ebx now contains y change
 		MOVL crosshairs_y, %EAX
 		ADDL %EBX, %EAX
-		CMPL $0, %EAX
+		CMPL $MIN_Y, %EAX
 		JL y_lessthan0
-		CMPL $24, %EAX
+		CMPL $MAX_Y, %EAX
 		JG y_greaterthan24
 		MOVL %EAX, crosshairs_y
 
@@ -296,7 +305,7 @@ movexhair_ydone:
 		SHLL $16, %ECX
 		PUSHL %ECX
 		CALL calc_vid_offset
-		MOVB $88, %CL
+		MOVB $XHAIR_CHAR, %CL
 		CALL mp1_poke
 		ADDL $8, %ESP
 		POPL %EDX
@@ -306,19 +315,19 @@ movexhair_ydone:
 		JMP ioctl_done
 
 x_lessthan0:
-		MOVL $0, %EAX
+		MOVL $MIN_X, %EAX
 		MOVL %EAX, crosshairs_x
 		JMP movexhair_xdone
 x_greaterthan79:
-		MOVL $79, %EAX
+		MOVL $MAX_X, %EAX
 		MOVL %EAX, crosshairs_x
 		JMP movexhair_xdone
 y_lessthan0:
-		MOVL $0, %EAX
+		MOVL $MIN_Y, %EAX
 		MOVL %EAX, crosshairs_y
 		JMP movexhair_ydone
 y_greaterthan24:
-		MOVL $24, %EAX
+		MOVL $MAX_Y, %EAX
 		MOVL %EAX, crosshairs_y
 		JMP movexhair_ydone
 
@@ -355,7 +364,7 @@ base_check_done:
 		PUSHL %EAX
 		PUSHL %ECX
 		PUSHL %EDX
-		PUSHL $4
+		PUSHL $SCORE_SIZE
 		PUSHL %EBX
 		PUSHL %ECX
 		CALL mp1_copy_to_user
@@ -399,6 +408,13 @@ endgame_done:
 jumptable:
 		.long mp1_ioctl_startgame, mp1_ioctl_addmissile, mp1_ioctl_movexhairs, mp1_ioctl_getstatus, mp1_ioctl_endgame
 
+# void print_all_bases()
+# This function automates the printing of the bases at the bottom
+# of the screen. It checks whether each base is alive or dead and then
+# prints the appropriate base image.
+# inputs		:	none
+# ouputs 		:	none
+# registers		:	standard C calling convention
 print_all_bases:
 		PUSHL %EBP
 		MOVL %ESP, %EBP
@@ -523,7 +539,7 @@ base_print_loop:
 		PUSHL %ECX
 		PUSHL %EDX
 
-		MOVL $24, %ESI
+		MOVL $MAX_Y, %ESI
 		SHLL $16, %ESI
 		PUSHL %ESI
 		MOVL %EBX, %ESI
@@ -549,7 +565,14 @@ base_print_loop:
 		LEAVE
 		RET
 
-#void update_missiles(struct * missile)
+# void update_missiles(struct * missile)
+# This function takes a pointer to a missile as an argument and
+# Performs the necessecary operations needed to update it. It
+# Checks whether the missile is out of bounds, if it's exploding, and
+# updates it's position on the screen otherwise
+# inputs 		:	missile pointer
+# output		:	none
+# Registers 	:	Standard C calling convention
 update_missiles:
 		PUSHL %EBP
 		MOVL %ESP, %EBP
@@ -595,15 +618,15 @@ update_position_done:
 		#Check if missile is out of bounds
 		MOVL Y(%EAX), %EBX
 		SHRL $16, %EBX
-		CMPL $0, %EBX
+		CMPL $MIN_Y, %EBX
 		JL update_OB_missile
-		CMPL $24, %EBX
+		CMPL $MAX_Y, %EBX
 		JG update_OB_missile
 		MOVL X(%EAX), %EBX
 		SHRL $16, %EBX
-		CMPL $0, %EBX
+		CMPL $MIN_X, %EBX
 		JL update_OB_missile
-		CMPL $79, %EBX
+		CMPL $MAX_X, %EBX
 		JG update_OB_missile
 
 		#Check if missile has reached its destination
@@ -669,6 +692,14 @@ update_OB_missile:
 
 
 # long int calc_vid_offset(int x, int y)
+# This function takes the x and y coordinates of a missile as arguments
+# and calculates the video offset necessary to place a character at the
+# location specified. NOTE: THE X AND Y COORDINATES ARE MEANT TO BE FROM
+# A MISSILE STRUCT, MEANING THE LOCATION ON THE SCREEN IS STORED IN THE
+# HIGH 16 BITS!!!!
+# input		:	x and y coordinates from a missile struct
+# Output 		:	The offset value used for video memory
+# registers		:	Standard C calling convention
 calc_vid_offset:
 		PUSHL %EBP
 		MOVL %ESP, %EBP
@@ -696,6 +727,12 @@ calc_vid_offset:
 		RET
 
 # void missile_offscreen(struct * missile)
+# This function takes a pointer to a missile that is out of bounds,
+# clears it from the screen, and then deletes the pointer from the
+# linked list
+# inputs		:	pointer to offscreen missile
+# Outputs		:	none
+# registers		: 	standard c calling convention
 # Local Variables	:	Old X (ebp-4), Old Y (ebp-8)
 missile_offscreen:
 		PUSHL %EBP
@@ -748,6 +785,12 @@ missile_offscreen:
 		RET
 
 # void missile_exploding(struct * missile)
+# This function takes a missile pointer as argument that is exploding
+# and decrements it's explosion counter, runs the missile_explode C function,
+# and deletes the missile when the explosion timer has ran out
+# Inputs		:	pointer to missile
+# Outputs		:	none
+# Registers		:	standard C calling conventions
 missile_exploding:
 		PUSHL %EBP
 		MOVL %ESP, %EBP
@@ -790,7 +833,7 @@ dont_notify_user:
 		PUSHL %EDI
 		PUSHL %ESI
 		CALL calc_vid_offset
-		MOVB $64, %CL
+		MOVB $EXPLOSION, %CL
 		CALL mp1_poke
 		ADDL $8, %ESP
 		POPL %EDX
@@ -811,7 +854,7 @@ dont_notify_user:
 		PUSHL Y(%EBX)
 		PUSHL X(%EBX)
 		CALL calc_vid_offset
-		MOVB $32, %CL
+		MOVB $SPACE_CHAR, %CL
 		CALL mp1_poke
 		ADDL $8, %ESP
 		POPL %EDX
@@ -871,7 +914,7 @@ missile_moving:
 		PUSHL -8(%EBP)
 		PUSHL -4(%EBP)
 		CALL calc_vid_offset
-		MOVB $32, %CL
+		MOVB $SPACE_CHAR, %CL
 		CALL mp1_poke
 		ADDL $8, %ESP
 		POPL %EDX
